@@ -1,6 +1,10 @@
-bin
-.settings
-.DS_Store
-TEST-*.txt
-TESTS-TestSuites.xml
-dist
+**target/
+**.checkstyle
+**.classpath
+**.externalToolBuilders/
+**.project
+**.settings/
+**.svn/
+**.tern-project
+**nb-actions/
+**nb-configuration/
