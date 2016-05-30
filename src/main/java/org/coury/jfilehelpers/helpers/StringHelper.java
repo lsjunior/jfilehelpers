@@ -2,20 +2,18 @@
  * StringHelper.java
  *
  * Copyright (C) 2007 Felipe Gonçalves Coury <felipe.coury@gmail.com>
- * 
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ *
+ * This program is free software; you can redistribute it and/or modify it under the terms of the
+ * GNU General Public License as published by the Free Software Foundation; either version 2 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with this program; if
+ * not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ * 02111-1307, USA.
  */
 
 package org.coury.jfilehelpers.helpers;
@@ -27,157 +25,155 @@ import org.coury.jfilehelpers.core.ExtractedInfo;
 import org.coury.jfilehelpers.engines.LineInfo;
 
 public class StringHelper {
-	public static void main(String[] args) {
-		String test1 = "abcdeCAmanducaia";
 
-		System.out.println(StringHelper.trimStart(test1, "abcdefghijklmnopqrstuvwxyz".toCharArray()));
-		System.out.println(StringHelper.trimEnd(test1, "abcdefghijklmnopqrstuvwxyz".toCharArray()));
-		System.out.println(StringHelper.trimBoth(test1, "abcdefghijklmnopqrstuvwxyz".toCharArray()));
-	}
-	
-	public static String toStringBuilder(Object o) {
-		return toStringBuilder(o, o.toString());
-	}
+  public static void main(final String[] args) {
+    String test1 = "abcdeCAmanducaia";
 
-	public static String toStringBuilder(Object o, String defaultString) {
-		try {
-			return getToString(o);
-		} catch (ClassNotFoundException e) {
-			return defaultString;
-		}
-	}
+    System.out.println(StringHelper.trimStart(test1, "abcdefghijklmnopqrstuvwxyz".toCharArray()));
+    System.out.println(StringHelper.trimEnd(test1, "abcdefghijklmnopqrstuvwxyz".toCharArray()));
+    System.out.println(StringHelper.trimBoth(test1, "abcdefghijklmnopqrstuvwxyz".toCharArray()));
+  }
 
-	private static String getToString(Object o) throws ClassNotFoundException {
-		Class.forName("org.apache.commons.lang.builder.ToStringBuilder");
-		return org.apache.commons.lang.builder.ToStringBuilder.reflectionToString(o, ToStringStyle.MULTI_LINE_STYLE);
-	}
+  public static String toStringBuilder(final Object o) {
+    return StringHelper.toStringBuilder(o, o.toString());
+  }
 
-	public static void createQuotedString(StringBuffer sb, String source, char quoteChar) {
-		if (source == null) source = "";
+  public static String toStringBuilder(final Object o, final String defaultString) {
+    try {
+      return StringHelper.getToString(o);
+    } catch (ClassNotFoundException e) {
+      return defaultString;
+    }
+  }
 
-		String quotedCharStr = Character.toString(quoteChar);
-		String escapedString = source.replace(quotedCharStr, quotedCharStr + quotedCharStr);
+  private static String getToString(final Object o) throws ClassNotFoundException {
+    Class.forName("org.apache.commons.lang.builder.ToStringBuilder");
+    return org.apache.commons.lang.builder.ToStringBuilder.reflectionToString(o,
+        ToStringStyle.MULTI_LINE_STYLE);
+  }
 
-		sb.append(quoteChar);
-		sb.append(escapedString);
-		sb.append(quoteChar);		
-	}
-	
-	public static ExtractedInfo extractQuotedString(LineInfo line, char quoteChar, boolean allowMultiline) throws IOException {
-		if (line.isEol()) {
-			throw new IllegalArgumentException(
-					"An empty String found and can be parsed like " +
-					"a QuotedString try to use SafeExtractQuotedString");
-		}
+  public static void createQuotedString(final StringBuffer sb, String source,
+      final char quoteChar) {
+    if (source == null) {
+      source = "";
+    }
 
-		if (line.getLine()[line.getCurrentPos()] != quoteChar) {
-			throw new IllegalArgumentException(
-					"The source string not begins with the quote char: " + 
-					quoteChar);
-		}
+    String quotedCharStr = Character.toString(quoteChar);
+    String escapedString = source.replace(quotedCharStr, quotedCharStr + quotedCharStr);
 
-		StringBuilder res = new StringBuilder(32);
-		//int lines = 0;
+    sb.append(quoteChar);
+    sb.append(escapedString);
+    sb.append(quoteChar);
+  }
 
-		boolean firstFound = false;
+  public static ExtractedInfo extractQuotedString(final LineInfo line, final char quoteChar,
+      final boolean allowMultiline) throws IOException {
+    if (line.isEol()) {
+      throw new IllegalArgumentException("An empty String found and can be parsed like "
+          + "a QuotedString try to use SafeExtractQuotedString");
+    }
 
-		int i = line.getCurrentPos() + 1;
-		//bool mustContinue = true;
+    if (line.getLine()[line.getCurrentPos()] != quoteChar) {
+      throw new IllegalArgumentException(
+          "The source string not begins with the quote char: " + quoteChar);
+    }
 
-		while (line.getLineStr() != null) {
-			while (i < line.getLine().length) {
-				if (line.getLine()[i] == quoteChar) {
-					if (firstFound == true) {
-						// Is an escaped quoted char
-						res.append(quoteChar);
-						firstFound = false;
-					}
-					else {
-						firstFound = true;
-					}
-				}
-				else {
-					if (firstFound) {
-						// This was the end of the string
-						line.setCurrentPos(i);
-						return new ExtractedInfo(res.toString());
-//						ExtractedInfo ei = ;
-//						return ei;
+    StringBuilder res = new StringBuilder(32);
+    // int lines = 0;
 
-					}
-					else {
-						res.append(line.getLine()[i]);
-					}
-				}
-				i++;
-			}
+    boolean firstFound = false;
 
-			if (firstFound) {
-				line.setCurrentPos(i);
-				return new ExtractedInfo(res.toString());
-			}
-			else {
-				if (allowMultiline == false) {
-					throw new IllegalArgumentException(
-							"The current field has an UnClosed quoted string. Complete line: " + res.toString());
-				}
+    int i = line.getCurrentPos() + 1;
+    // bool mustContinue = true;
 
-				line.readNextLine();
-				res.append(StringHelper.NEW_LINE);
-				//lines++;
-				i = 0;
-			}
-		}
+    while (line.getLineStr() != null) {
+      while (i < line.getLine().length) {
+        if (line.getLine()[i] == quoteChar) {
+          if (firstFound == true) {
+            // Is an escaped quoted char
+            res.append(quoteChar);
+            firstFound = false;
+          } else {
+            firstFound = true;
+          }
+        } else {
+          if (firstFound) {
+            // This was the end of the string
+            line.setCurrentPos(i);
+            return new ExtractedInfo(res.toString());
+            // ExtractedInfo ei = ;
+            // return ei;
 
-		throw new IllegalArgumentException(
-				"The current field has an unclosed quoted string. Complete Filed String: " + res.toString());
-	}
-	
-	public static String trimBoth(String s, char[] toTrim) {
-		return trimStart(trimEnd(s, toTrim), toTrim);
-	}
-	
-	public static String trimStart(String s, char[] toTrim) {
-		char[] sChars = s.toCharArray();
-		String toTrimStr = new String(toTrim);
-		StringBuffer sb = new StringBuffer();
-		
-		boolean trimming = true;
-		for (int i = 0; i < sChars.length; i++) {
-			if (toTrimStr.indexOf(sChars[i]) == -1) {
-				trimming = false;
-			}
-			
-			if (!trimming) {
-				sb.append(sChars[i]);
-			}
-		}
-		
-		return sb.toString();
-	}
+          } else {
+            res.append(line.getLine()[i]);
+          }
+        }
+        i++;
+      }
 
-	public static String trimEnd(String s, char[] toTrim) {
-		char[] sChars = s.toCharArray();
-		String toTrimStr = new String(toTrim);
-		StringBuffer sb = new StringBuffer(s);
-		
-		for (int i = sChars.length-1; i >= 0; i--) {
-			if (toTrimStr.indexOf(sChars[i]) > -1) {
-				sb.deleteCharAt(i);
-			}
-			else {
-				break;
-			}
-		}
-		
-		return sb.toString();
-	}
+      if (firstFound) {
+        line.setCurrentPos(i);
+        return new ExtractedInfo(res.toString());
+      } else {
+        if (allowMultiline == false) {
+          throw new IllegalArgumentException(
+              "The current field has an UnClosed quoted string. Complete line: " + res.toString());
+        }
 
-	public static final char[] WHITESPACE_CHARS = 
-		new char[] { 
-			'\t', '\n', '\f', '\r', ' ', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', 
-			'\u2009', '\u200a', '\u200b', '\u3000', '\ufeff'
-		};
-	
-	public static final String NEW_LINE = System.getProperty("line.separator");
+        line.readNextLine();
+        res.append(StringHelper.NEW_LINE);
+        // lines++;
+        i = 0;
+      }
+    }
+
+    throw new IllegalArgumentException(
+        "The current field has an unclosed quoted string. Complete Filed String: "
+            + res.toString());
+  }
+
+  public static String trimBoth(final String s, final char[] toTrim) {
+    return StringHelper.trimStart(StringHelper.trimEnd(s, toTrim), toTrim);
+  }
+
+  public static String trimStart(final String s, final char[] toTrim) {
+    char[] sChars = s.toCharArray();
+    String toTrimStr = new String(toTrim);
+    StringBuffer sb = new StringBuffer();
+
+    boolean trimming = true;
+    for (int i = 0; i < sChars.length; i++) {
+      if (toTrimStr.indexOf(sChars[i]) == -1) {
+        trimming = false;
+      }
+
+      if (!trimming) {
+        sb.append(sChars[i]);
+      }
+    }
+
+    return sb.toString();
+  }
+
+  public static String trimEnd(final String s, final char[] toTrim) {
+    char[] sChars = s.toCharArray();
+    String toTrimStr = new String(toTrim);
+    StringBuffer sb = new StringBuffer(s);
+
+    for (int i = sChars.length - 1; i >= 0; i--) {
+      if (toTrimStr.indexOf(sChars[i]) > -1) {
+        sb.deleteCharAt(i);
+      } else {
+        break;
+      }
+    }
+
+    return sb.toString();
+  }
+
+  public static final char[] WHITESPACE_CHARS =
+      new char[] {'\t', '\n', '\f', '\r', ' ', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004',
+          '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200a', '\u200b', '\u3000', '\ufeff'};
+
+  public static final String NEW_LINE = System.getProperty("line.separator");
 }

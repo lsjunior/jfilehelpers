@@ -2,20 +2,18 @@
  * FileHelperEngine.java
  *
  * Copyright (C) 2007 Felipe Gon�alves Coury <felipe.coury@gmail.com>
- * 
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ *
+ * This program is free software; you can redistribute it and/or modify it under the terms of the
+ * GNU General Public License as published by the Free Software Foundation; either version 2 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with this program; if
+ * not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ * 02111-1307, USA.
  */
 package org.coury.jfilehelpers.engines;
 
@@ -50,355 +48,386 @@ import org.coury.jfilehelpers.interfaces.NotifyWrite;
 
 public class FileHelperEngine<T> extends EngineBase<T> implements Iterable<T> {
 
-    private int maxRecords = 0;
-    private int currentRecord = 0;
-    private LineInfo line;
-    private String currentLine;
-    private String completeLine;
-    private FileReader fr = null;
-    private ForwardReader freader = null;
-    
-    private BeforeReadRecordHandler<T> beforeReadRecordHandler;
-    private AfterReadRecordHandler<T> afterReadRecordHandler;
-    private BeforeWriteRecordHandler<T> beforeWriteRecordHandler;
-    private AfterWriteRecordHandler<T> afterWriteRecordHandler;
+  private int maxRecords = 0;
 
-    public FileHelperEngine(Class<T> recordClass) {
-        super(recordClass);
+  private int currentRecord = 0;
+
+  private LineInfo line;
+
+  private String currentLine;
+
+  private String completeLine;
+
+  private FileReader fr = null;
+
+  private ForwardReader freader = null;
+
+  private BeforeReadRecordHandler<T> beforeReadRecordHandler;
+
+  private AfterReadRecordHandler<T> afterReadRecordHandler;
+
+  private BeforeWriteRecordHandler<T> beforeWriteRecordHandler;
+
+  private AfterWriteRecordHandler<T> afterWriteRecordHandler;
+
+  public FileHelperEngine(final Class<T> recordClass) {
+    super(recordClass);
+  }
+
+  public List<T> readFile(final String fileName) throws IOException {
+    return this.readFile(fileName, Integer.MAX_VALUE);
+  }
+
+  public void writeFile(final String fileName, final List<T> records) throws IOException {
+    this.writeFile(fileName, records, -1);
+  }
+
+  public void writeFile(final String fileName, final List<T> records, final int maxRecords)
+      throws IOException {
+    FileWriter fw = null;
+    try {
+      fw = new FileWriter(new File(fileName));
+      // fw.write("ABCDEF\n");
+      this.writeStream(fw, records, maxRecords);
+    } finally {
+      if (fw != null) {
+        fw.flush();
+        fw.close();
+      }
     }
+  }
 
-    public List<T> readFile(String fileName) throws IOException {
-        return readFile(fileName, Integer.MAX_VALUE);
-    }
+  public void writeStream(final Writer writer, final List<T> records) throws IOException {
+    this.writeStream(writer, (Iterable<T>) records, -1);
+  }
 
-    public void writeFile(String fileName, List<T> records) throws IOException {
-        writeFile(fileName, records, -1);
-    }
+  public void writeStream(final Writer writer, final List<T> records, final int maxRecords)
+      throws IOException {
+    this.writeStream(writer, (Iterable<T>) records, maxRecords);
+  }
 
-    public void writeFile(String fileName, List<T> records, int maxRecords) throws IOException {
-        FileWriter fw = null;
-        try {
-            fw = new FileWriter(new File(fileName));
-            //fw.write("ABCDEF\n");
-            writeStream(fw, records, maxRecords);
-        } finally {
-            if (fw != null) {
-                fw.flush();
-                fw.close();
-            }
-        }
-    }
-    
-    public String getRecordsAsString(List<T> records) throws IOException {
-    	StringWriter sw = new StringWriter();
-    	writeStream(sw, records, -1);
-    	return sw.getBuffer().toString();
-    }
+  public String getRecordsAsString(final List<T> records) throws IOException {
+    StringWriter sw = new StringWriter();
+    this.writeStream(sw, records, -1);
+    return sw.getBuffer().toString();
+  }
 
-    private void writeStream(Writer osr, Iterable<T> records, int maxRecords) throws IOException {
-        BufferedWriter writer = new BufferedWriter(osr);
+  private void writeStream(final Writer osr, final Iterable<T> records, final int maxRecords)
+      throws IOException {
+    BufferedWriter writer = new BufferedWriter(osr);
 
-        try {
-            resetFields();
-            if (getHeaderText() != null && getHeaderText().length() != 0) {
-                if (getHeaderText().endsWith(StringHelper.NEW_LINE)) {
-                    writer.write(getHeaderText());
-                } else {
-                    writer.write(getHeaderText() + StringHelper.NEW_LINE);
-                }
-            }
-
-            int max = maxRecords;
-            if (records instanceof Collection) {
-                max = Math.min(max < 0 ? Integer.MAX_VALUE : max, ((Collection<T>) records).size());
-            }
-
-            ProgressHelper.notify(notifyHandler, progressMode, 0, max);
-
-            int recIndex = 0;
-            boolean first = true;
-
-            for (T rec : records) {
-                if (recIndex == maxRecords) {
-                    break;
-                }
-
-                this.lineNumber++;
-
-                try {
-                    if (rec == null) {
-                        throw new IllegalArgumentException(
-                                "The record at index " + recIndex + " is null.");
-                    }
-
-                    if (first) {
-                        first = false;
-                    }
-
-                    boolean skip = false;
-                    ProgressHelper.notify(notifyHandler, progressMode, recIndex + 1, max);
-                    skip = onBeforeWriteRecord(rec);
-
-                    if (!skip) {
-                        currentLine = recordInfo.recordToStr(rec);
-                        currentLine = onAfterWriteRecord(currentLine, rec);
-                        writer.write(currentLine + StringHelper.NEW_LINE);
-                    }
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                // TODO error manager
-//				switch (mErrorManager.ErrorMode)
-//				{
-//					case ErrorMode.ThrowException:
-//						throw;
-//					case ErrorMode.IgnoreAndContinue:
-//						break;
-//					case ErrorMode.SaveAndContinue:
-//						ErrorInfo err = new ErrorInfo();
-//						err.mLineNumber = mLineNumber;
-//						err.mExceptionInfo = ex;
-////						err.mColumnNumber = mColumnNum;
-//						err.mRecordString = currentLine;
-//						mErrorManager.AddError(err);
-//						break;
-//				}
-                }
-                recIndex++;
-            }
-            currentLine = null;
-            totalRecords = recIndex;
-
-//			if (mFooterText != null && mFooterText != string.Empty)
-//				if (mFooterText.EndsWith(StringHelper.NewLine))
-//					writer.Write(mFooterText);
-//				else
-//					writer.WriteLine(mFooterText);
-        } finally {
-            writer.flush();
-        }
-    }
-    
-    public List<T> readFile(String fileName, int maxRecords) throws IOException {
-        List<T> tempRes = null;
-        Reader r = null;
-        try {
-            r = new FileReader(new File(fileName));
-            tempRes = readStream(r, maxRecords);
-        } finally {
-            if (r != null) {
-                r.close();
-            }
-        }
-        return tempRes;
-    }
-
-    public List<T> readResource(String resourceName) throws IOException {
-        return readResource(resourceName, Integer.MAX_VALUE);
-    }
-
-    public List<T> readResource(String fileName, int maxRecords) throws IOException {
-        List<T> tempRes = null;
-        Reader r = null;
-        try {
-            r = new InputStreamReader(getClass().getResourceAsStream(fileName));
-            tempRes = readStream(r, maxRecords);
-        } finally {
-            if (r != null) {
-                r.close();
-            }
-        }
-
-        return tempRes;
-    }
-
-    public List<T> readStream(Reader fileReader, int maxRecords) throws IOException {
-        List<T> list = null;
-        try {
-            list = new ArrayList<T>();
-            openStream(fileReader, maxRecords);
-            for (T t : this) {
-            	if (t != null) {
-            		list.add(t);
-            	}
-            }
-        } catch (IOException e) {
-            throw e;
-        } finally {
-            close();
-        }
-        return list;
-    }
-
-    public void openFile(String fileName) throws IOException {
-        openFile(fileName, Integer.MAX_VALUE);
-    }
-    
-    public void openFile(String fileName, int maxRecords) throws IOException {
-        fr = new FileReader(new File(fileName));
-        openStream(fr, maxRecords);
-    }
-    
-    public void openResource(String resourceName) throws IOException {
-        openResource(resourceName, Integer.MAX_VALUE);
-    }
-
-    public void openResource(String fileName, int maxRecords) throws IOException {
-        Reader r = null;
-        r = new InputStreamReader(getClass().getResourceAsStream(fileName));
-        openStream(r, maxRecords);
-    }
-    
-    public void openStream(Reader fileReader, int maxRecords) throws IOException {
-        BufferedReader reader = new BufferedReader(fileReader);
-        resetFields();
-        setHeaderText("");
-        setFooterText("");
-
-        freader = new ForwardReader(reader, recordInfo.getIgnoreLast());
-        freader.setDiscardForward(true);
-
-        setLineNumber(1);
-        completeLine = freader.readNextLine();
-        currentLine = completeLine;
-
-        ProgressHelper.notify(notifyHandler, progressMode, 0, -1);
-
-        if (recordInfo.getIgnoreFirst() > 0) {
-            for (int i = 0; i < recordInfo.getIgnoreFirst() && currentLine != null; i++) {
-                headerText += currentLine + StringHelper.NEW_LINE;
-                currentLine = freader.readNextLine();
-                lineNumber++;
-            }
-        }
-
-        // TODO boolean byPass = false;
-
-        if (maxRecords < 0) {
-            this.maxRecords = Integer.MAX_VALUE;
+    try {
+      this.resetFields();
+      if ((this.getHeaderText() != null) && (this.getHeaderText().length() != 0)) {
+        if (this.getHeaderText().endsWith(StringHelper.NEW_LINE)) {
+          writer.write(this.getHeaderText());
         } else {
-            this.maxRecords = maxRecords;
+          writer.write(this.getHeaderText() + StringHelper.NEW_LINE);
+        }
+      }
+
+      int max = maxRecords;
+      if (records instanceof Collection) {
+        max = Math.min(max < 0 ? Integer.MAX_VALUE : max, ((Collection<T>) records).size());
+      }
+
+      ProgressHelper.notify(this.notifyHandler, this.progressMode, 0, max);
+
+      int recIndex = 0;
+      boolean first = true;
+
+      for (T rec : records) {
+        if (recIndex == maxRecords) {
+          break;
         }
 
-        line = new LineInfo(currentLine);
-        line.setReader(freader);
-    }
-    
-    public void close() throws IOException {
-        if (fr != null) {
-            fr.close();
+        this.lineNumber++;
+
+        try {
+          if (rec == null) {
+            throw new IllegalArgumentException("The record at index " + recIndex + " is null.");
+          }
+
+          if (first) {
+            first = false;
+          }
+
+          boolean skip = false;
+          ProgressHelper.notify(this.notifyHandler, this.progressMode, recIndex + 1, max);
+          skip = this.onBeforeWriteRecord(rec);
+
+          if (!skip) {
+            this.currentLine = this.recordInfo.recordToStr(rec);
+            this.currentLine = this.onAfterWriteRecord(this.currentLine, rec);
+            writer.write(this.currentLine + StringHelper.NEW_LINE);
+          }
+
+        } catch (Exception ex) {
+          ex.printStackTrace();
+          // TODO error manager
+          // switch (mErrorManager.ErrorMode)
+          // {
+          // case ErrorMode.ThrowException:
+          // throw;
+          // case ErrorMode.IgnoreAndContinue:
+          // break;
+          // case ErrorMode.SaveAndContinue:
+          // ErrorInfo err = new ErrorInfo();
+          // err.mLineNumber = mLineNumber;
+          // err.mExceptionInfo = ex;
+          //// err.mColumnNumber = mColumnNum;
+          // err.mRecordString = currentLine;
+          // mErrorManager.AddError(err);
+          // break;
+          // }
         }
+        recIndex++;
+      }
+      this.currentLine = null;
+      this.totalRecords = recIndex;
+
+      // if (mFooterText != null && mFooterText != string.Empty)
+      // if (mFooterText.EndsWith(StringHelper.NewLine))
+      // writer.Write(mFooterText);
+      // else
+      // writer.WriteLine(mFooterText);
+    } finally {
+      writer.flush();
     }
-    
-    public void setBeforeReadRecordHandler(BeforeReadRecordHandler<T> beforeReadRecordHandler) {
-        this.beforeReadRecordHandler = beforeReadRecordHandler;
+  }
+
+  public List<T> readFile(final String fileName, final int maxRecords) throws IOException {
+    List<T> tempRes = null;
+    Reader r = null;
+    try {
+      r = new FileReader(new File(fileName));
+      tempRes = this.readStream(r, maxRecords);
+    } finally {
+      if (r != null) {
+        r.close();
+      }
+    }
+    return tempRes;
+  }
+
+  public List<T> readResource(final String resourceName) throws IOException {
+    return this.readResource(resourceName, Integer.MAX_VALUE);
+  }
+
+  public List<T> readResource(final String fileName, final int maxRecords) throws IOException {
+    List<T> tempRes = null;
+    Reader r = null;
+    try {
+      r = new InputStreamReader(this.getClass().getResourceAsStream(fileName));
+      tempRes = this.readStream(r, maxRecords);
+    } finally {
+      if (r != null) {
+        r.close();
+      }
     }
 
-    public void setAfterReadRecordHandler(AfterReadRecordHandler<T> afterReadRecordHandler) {
-        this.afterReadRecordHandler = afterReadRecordHandler;
-    }
+    return tempRes;
+  }
 
-    public void setBeforeWriteRecordHandler(BeforeWriteRecordHandler<T> beforeWriteRecordHandler) {
-        this.beforeWriteRecordHandler = beforeWriteRecordHandler;
-    }
+  public List<T> readStream(final Reader fileReader) throws IOException {
+    return this.readStream(fileReader, Integer.MAX_VALUE);
+  }
 
-    public void setAfterWriteRecordHandler(AfterWriteRecordHandler<T> afterWriteRecordHandler) {
-        this.afterWriteRecordHandler = afterWriteRecordHandler;
-    }
-
-    private boolean onBeforeReadRecord(BeforeReadRecordEventArgs<T> e) {
-        if (beforeReadRecordHandler != null) {
-            beforeReadRecordHandler.handleBeforeReadRecord(this, e);
-            return e.getSkipThisRecord();
+  public List<T> readStream(final Reader fileReader, final int maxRecords) throws IOException {
+    List<T> list = null;
+    try {
+      list = new ArrayList<T>();
+      this.openStream(fileReader, maxRecords);
+      for (T t : this) {
+        if (t != null) {
+          list.add(t);
         }
-        return false;
+      }
+    } catch (IOException e) {
+      throw e;
+    } finally {
+      this.close();
+    }
+    return list;
+  }
+
+  public void openFile(final String fileName) throws IOException {
+    this.openFile(fileName, Integer.MAX_VALUE);
+  }
+
+  public void openFile(final String fileName, final int maxRecords) throws IOException {
+    this.fr = new FileReader(new File(fileName));
+    this.openStream(this.fr, maxRecords);
+  }
+
+  public void openResource(final String resourceName) throws IOException {
+    this.openResource(resourceName, Integer.MAX_VALUE);
+  }
+
+  public void openResource(final String fileName, final int maxRecords) throws IOException {
+    Reader r = null;
+    r = new InputStreamReader(this.getClass().getResourceAsStream(fileName));
+    this.openStream(r, maxRecords);
+  }
+
+  public void openStream(final Reader fileReader, final int maxRecords) throws IOException {
+    BufferedReader reader = new BufferedReader(fileReader);
+    this.resetFields();
+    this.setHeaderText("");
+    this.setFooterText("");
+
+    this.freader = new ForwardReader(reader, this.recordInfo.getIgnoreLast());
+    this.freader.setDiscardForward(true);
+
+    this.setLineNumber(1);
+    this.completeLine = this.freader.readNextLine();
+    this.currentLine = this.completeLine;
+
+    ProgressHelper.notify(this.notifyHandler, this.progressMode, 0, -1);
+
+    if (this.recordInfo.getIgnoreFirst() > 0) {
+      for (int i = 0; (i < this.recordInfo.getIgnoreFirst()) && (this.currentLine != null); i++) {
+        this.headerText += this.currentLine + StringHelper.NEW_LINE;
+        this.currentLine = this.freader.readNextLine();
+        this.lineNumber++;
+      }
     }
 
-    @SuppressWarnings("unchecked")
-    private boolean onAfterReadRecord(String line, T record) {
-        if (recordInfo.isNotifyRead()) {
-            ((NotifyRead<T>) record).afterRead(this, line);
+    // TODO boolean byPass = false;
+
+    if (maxRecords < 0) {
+      this.maxRecords = Integer.MAX_VALUE;
+    } else {
+      this.maxRecords = maxRecords;
+    }
+
+    this.line = new LineInfo(this.currentLine);
+    this.line.setReader(this.freader);
+  }
+
+  public void close() throws IOException {
+    if (this.fr != null) {
+      this.fr.close();
+    }
+  }
+
+  public void setBeforeReadRecordHandler(final BeforeReadRecordHandler<T> beforeReadRecordHandler) {
+    this.beforeReadRecordHandler = beforeReadRecordHandler;
+  }
+
+  public void setAfterReadRecordHandler(final AfterReadRecordHandler<T> afterReadRecordHandler) {
+    this.afterReadRecordHandler = afterReadRecordHandler;
+  }
+
+  public void setBeforeWriteRecordHandler(
+      final BeforeWriteRecordHandler<T> beforeWriteRecordHandler) {
+    this.beforeWriteRecordHandler = beforeWriteRecordHandler;
+  }
+
+  public void setAfterWriteRecordHandler(final AfterWriteRecordHandler<T> afterWriteRecordHandler) {
+    this.afterWriteRecordHandler = afterWriteRecordHandler;
+  }
+
+  private boolean onBeforeReadRecord(final BeforeReadRecordEventArgs<T> e) {
+    if (this.beforeReadRecordHandler != null) {
+      this.beforeReadRecordHandler.handleBeforeReadRecord(this, e);
+      return e.getSkipThisRecord();
+    }
+    return false;
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean onAfterReadRecord(final String line, final T record) {
+    if (this.recordInfo.isNotifyRead()) {
+      ((NotifyRead<T>) record).afterRead(this, line);
+    }
+    if (this.afterReadRecordHandler != null) {
+      AfterReadRecordEventArgs<T> e =
+          new AfterReadRecordEventArgs<T>(line, record, this.lineNumber);
+      this.afterReadRecordHandler.handleAfterReadRecord(this, e);
+      return e.getSkipThisRecord();
+    }
+    return false;
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean onBeforeWriteRecord(final T record) {
+    if (this.recordInfo.isNotifyWrite()) {
+      ((NotifyWrite<T>) record).beforeWrite(this);
+    }
+    if (this.beforeWriteRecordHandler != null) {
+      BeforeWriteRecordEventArgs<T> e = new BeforeWriteRecordEventArgs<T>(record, this.lineNumber);
+      this.beforeWriteRecordHandler.handleBeforeWriteRecord(this, e);
+      return e.getSkipThisRecord();
+    }
+    return false;
+  }
+
+  private String onAfterWriteRecord(final String line, final T record) {
+    if (this.afterWriteRecordHandler != null) {
+      AfterWriteRecordEventArgs<T> e =
+          new AfterWriteRecordEventArgs<T>(record, this.lineNumber, line);
+      this.afterWriteRecordHandler.handleAfterWriteRecord(this, e);
+      return e.getRecordLine();
+    }
+    return line;
+  }
+
+  public boolean hasNext() {
+    return (this.currentLine != null);
+  }
+
+  @Override
+  public Iterator<T> iterator() {
+    return new Iterator<T>() {
+
+      @Override
+      public boolean hasNext() {
+        return (FileHelperEngine.this.currentLine != null);
+      }
+
+      @Override
+      public T next() {
+        T record = null;
+        if ((FileHelperEngine.this.currentLine != null)
+            && (FileHelperEngine.this.currentRecord < FileHelperEngine.this.maxRecords)) {
+          try {
+            FileHelperEngine.this.totalRecords++;
+            FileHelperEngine.this.currentRecord++;
+            FileHelperEngine.this.line.reload(FileHelperEngine.this.currentLine);
+            boolean skip = false;
+            ProgressHelper.notify(FileHelperEngine.this.notifyHandler,
+                FileHelperEngine.this.progressMode, FileHelperEngine.this.currentRecord, -1);
+            BeforeReadRecordEventArgs<T> e = new BeforeReadRecordEventArgs<T>(
+                FileHelperEngine.this.currentLine, FileHelperEngine.this.lineNumber);
+            skip = FileHelperEngine.this.onBeforeReadRecord(e);
+            if (e.getRecordLineChanged()) {
+              FileHelperEngine.this.line.reload(e.getRecordLine());
+            }
+            if (!skip) {
+              record = FileHelperEngine.this.recordInfo.strToRecord(FileHelperEngine.this.line);
+              skip = FileHelperEngine.this.onAfterReadRecord(FileHelperEngine.this.currentLine,
+                  record);
+              if (skip) {
+                record = null;
+              }
+            }
+            FileHelperEngine.this.currentLine = FileHelperEngine.this.freader.readNextLine();
+            FileHelperEngine.this.completeLine = FileHelperEngine.this.currentLine;
+            FileHelperEngine.this.lineNumber++;
+          } catch (IOException ex) {
+            throw new Error(ex);
+          }
         }
-        if (afterReadRecordHandler != null) {
-            AfterReadRecordEventArgs<T> e = new AfterReadRecordEventArgs<T>(line, record, lineNumber);
-            afterReadRecordHandler.handleAfterReadRecord(this, e);
-            return e.getSkipThisRecord();
-        }
-        return false;
-    }
+        return record;
+      }
 
-    @SuppressWarnings("unchecked")
-    private boolean onBeforeWriteRecord(T record) {
-        if (recordInfo.isNotifyWrite()) {
-            ((NotifyWrite<T>) record).beforeWrite(this);
-        }
-        if (beforeWriteRecordHandler != null) {
-            BeforeWriteRecordEventArgs<T> e = new BeforeWriteRecordEventArgs<T>(record, lineNumber);
-            beforeWriteRecordHandler.handleBeforeWriteRecord(this, e);
-            return e.getSkipThisRecord();
-        }
-        return false;
-    }
+      @Override
+      public void remove() {
+        throw new UnsupportedOperationException("Not supported yet.");
+      }
 
-    private String onAfterWriteRecord(String line, T record) {
-        if (afterWriteRecordHandler != null) {
-            AfterWriteRecordEventArgs<T> e = new AfterWriteRecordEventArgs<T>(record, lineNumber, line);
-            afterWriteRecordHandler.handleAfterWriteRecord(this, e);
-            return e.getRecordLine();
-        }
-        return line;
-    }
+    };
+  }
 
-    public boolean hasNext() {
-        return (currentLine != null);
-    }
-
-    public Iterator<T> iterator() {
-        return new Iterator<T>() {
-
-			@Override
-			public boolean hasNext() {
-		        return (currentLine != null);
-			}
-
-			@Override
-			public T next() {
-		        T record = null;
-		        if (currentLine != null && currentRecord < maxRecords) {
-		            try {
-		                totalRecords++;
-		                currentRecord++;
-		                line.reload(currentLine);
-		                boolean skip = false;
-		                ProgressHelper.notify(notifyHandler, progressMode, currentRecord, -1);
-		                BeforeReadRecordEventArgs<T> e = new BeforeReadRecordEventArgs<T>(currentLine, lineNumber);
-		                skip = onBeforeReadRecord(e);
-		                if (e.getRecordLineChanged()) {
-		                    line.reload(e.getRecordLine());
-		                }
-		                if (!skip) {
-		                    record = recordInfo.strToRecord(line);
-		                    skip = onAfterReadRecord(currentLine, record);
-		                    if (skip) {
-		                    	record = null;
-		                    }
-		                }
-		                currentLine = freader.readNextLine();
-		                completeLine = currentLine;
-		                lineNumber++;
-		            } catch (IOException ex) {
-		                throw new Error(ex);
-		            }
-		        }
-		        return record;
-			}
-
-			@Override
-			public void remove() {
-		        throw new UnsupportedOperationException("Not supported yet.");
-			}
-        	
-        };
-    }
-    
 }
